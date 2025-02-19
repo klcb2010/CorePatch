@@ -1,0 +1,64 @@
+name: Sync All CorePatch Releases
+
+on:
+  schedule:
+    # 每天同步一次所有 release
+    - cron: "0 0 * * *"  # 每天的 UTC 00:00
+  workflow_dispatch: # 允许手动触发
+
+jobs:
+  sync-releases:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Set up Git
+      run: |
+        git config user.name "klcb2010"
+        git config user.email "klcb2010@gmail.com"
+
+    - name: Set up GitHub Token
+      run: echo "GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}" >> $GITHUB_ENV
+
+    - name: Fetch all releases from CorePatch
+      run: |
+        # 获取所有 release 的下载链接
+        releases=$(curl -s https://api.github.com/repos/LSPosed/CorePatch/releases | jq -r '.[] | {tag_name, assets: .assets[].browser_download_url}')
+        
+        # 创建发布并上传资产
+        for release in $(echo "$releases" | jq -r '.tag_name'); do
+          # 获取每个 release 的资产
+          assets=$(echo "$releases" | jq -r ".[] | select(.tag_name==\"$release\") | .assets[]")
+          
+          # 创建新发布
+          release_response=$(curl -s -X POST https://api.github.com/repos/klcb2010/CorePatch/releases \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -d "{
+              \"tag_name\": \"$release\",
+              \"name\": \"Release $release\",
+              \"body\": \"This is the release for version $release\",
+              \"draft\": false,
+              \"prerelease\": false
+            }"
+          )
+          
+          # 获取新发布的 ID
+          release_id=$(echo $release_response | jq -r '.id')
+
+          # 下载并上传每个资产
+          for asset in $assets; do
+            file_name=$(basename "$asset")
+            echo "Downloading $file_name and uploading to release"
+
+            # 下载文件
+            curl -L -o "$file_name" "$asset"
+
+            # 上传文件到发布
+            curl -X POST -H "Authorization: token $GITHUB_TOKEN" \
+              -H "Content-Type: application/octet-stream" \
+              --data-binary @"$file_name" \
+              "https://uploads.github.com/repos/klcb2010/CorePatch/releases/$release_id/assets?name=$file_name"
+          done
+        done
