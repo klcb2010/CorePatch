@@ -3,7 +3,7 @@ name: Sync Latest CorePatch Release
 on:
   schedule:
     # 每天同步一次最新 release
-    - cron: "45 12 * * *"  # 每天的 UTC 00:00
+    - cron: "55 12 * * *"  # 每天的 UTC 00:00
   workflow_dispatch: # 允许手动触发
 
 jobs:
